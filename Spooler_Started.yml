@@ -1,0 +1,11 @@
+---
+- name: Set Sppoler service startup mode to Auto and ensure it is Running.
+  hosts: all
+  
+  tasks:
+  
+  - name: Set Sppoler service startup mode to Auto and ensure it is Running.
+    win_service:
+      name: spooler
+      start_mode: auto
+      state: started
