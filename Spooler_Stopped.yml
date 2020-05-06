@@ -1,10 +1,10 @@
 ---
-- name: Set Sppoler service startup mode to Disabled and ensure it is Stopped
+- name: Set Sppoler service startup mode to Disabled and ensure it is Stopped.
   hosts: all
   
   tasks:
-  - name: Set Sppoler service startup mode to Disabled and ensure it is Stopped
   
+  - name: Set Sppoler service startup mode to Disabled and ensure it is Stopped.
     win_service:
       name: spooler
       start_mode: disabled
