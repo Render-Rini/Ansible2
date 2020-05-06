@@ -1,0 +1,5 @@
+- name: Set Sppoler service startup mode to Disabled and ensure it is Stopped
+  win_service:
+    name: spooler
+    start_mode: disabled
+    state: stopped
