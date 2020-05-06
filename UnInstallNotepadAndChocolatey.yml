@@ -1,0 +1,12 @@
+---
+- name: UnInstall Notepad++ and 7zip via Chocolatey.
+  hosts: all
+  
+  tasks:
+  
+  - name: UnInstall multiple packages.
+    win_chocolatey:
+      name:
+      - notepadplusplus
+      - 7zip.install
+      state: absent
