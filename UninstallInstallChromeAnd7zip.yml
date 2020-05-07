@@ -1,0 +1,12 @@
+---
+- name: Install Notepad++ and 7zip via Chocolatey.
+  hosts: all
+  
+  tasks:
+  
+  - name: Uninstall multiple packages.
+    win_chocolatey:
+      name:
+      - googlechrome
+      - 7zip.install
+      state: absent
