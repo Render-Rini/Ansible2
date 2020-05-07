@@ -1,0 +1,212 @@
+#
+---
+- hosts: localhost
+  vars:
+    customer_code: c002
+    app_code: 1c
+    resource_group_network: "{{ customer_code }}-rg-network"
+    resource_group_monitoring: "{{ customer_code }}-rg-monitoring"
+    resource_group_backup: "{{ customer_code }}-rg-backup"
+    resource_group_vm: "{{ customer_code }}-rg-{{ app_code }}"
+    Subnet1_name: ServerSubnet
+    VNET_name: "{{ customer_code }}-vnet-hybrid"
+    NSG1_name: "{{ VNET_name }}-nsg-s-{{ Subnet1_name }}"
+    location: westeurope
+    virtual_machine_name: "s{{ customer_code }}appazwe001"
+    admin_username: isaadmin
+    admin_password: Nj(8wQedBD83$1)a
+    winrm_enable_script: SQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuACAALQBDAG8AbQBtAGEAbgBkACAAKAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABTAHkAcwB0AGUAbQAuAE4AZQB0AC4AVwBlAGIAQwBsAGkAZQBuAHQAKQAuAEQAbwB3AG4AbABvAGEAZABTAHQAcgBpAG4AZwAoACcAaAB0AHQAcABzADoALwAvAHIAYQB3AC4AZwBpAHQAaAB1AGIAdQBzAGUAcgBjAG8AbgB0AGUAbgB0AC4AYwBvAG0ALwBhAG4AcwBpAGIAbABlAC8AYQBuAHMAaQBiAGwAZQAvAGQAZQB2AGUAbAAvAGUAeABhAG0AcABsAGUAcwAvAHMAYwByAGkAcAB0AHMALwBDAG8AbgBmAGkAZwB1AHIAZQBSAGUAbQBvAHQAaQBuAGcARgBvAHIAQQBuAHMAaQBiAGwAZQAuAHAAcwAxACcAKQApADsAIABFAG4AYQBiAGwAZQAtAFcAUwBNAGEAbgBDAHIAZQBkAFMAUwBQACAALQBSAG8AbABlACAAUwBlAHIAdgBlAHIAIAAtAEYAbwByAGMAZQA=
+
+
+  tasks:
+    - name: Create a resource group "{{ resource_group_network }}"
+      azure_rm_resourcegroup:
+        name: "{{ resource_group_network }}"
+        location: "{{ location }}"
+
+    - name: Create a resource group "{{ resource_group_backup }}"
+      azure_rm_resourcegroup:
+        name: "{{ resource_group_backup }}"
+        location: "{{ location }}"
+
+    - name: Create a resource group "{{ resource_group_monitoring }}"
+      azure_rm_resourcegroup:
+        name: "{{ resource_group_monitoring }}"
+        location: "{{ location }}"
+
+    - name: Create a resource group "{{ resource_group_vm }}"
+      azure_rm_resourcegroup:
+        name: "{{ resource_group_vm }}"
+        location: "{{ location }}"
+            
+    - name: Create security group "{{ NSG1_name }}"
+      azure_rm_securitygroup:
+        resource_group: "{{ resource_group_network }}"
+        name: "{{ NSG1_name }}"
+        purge_rules: yes
+        rules:
+          - name: ALLOW_RDP
+            protocol: Tcp
+            destination_port_range: 3389
+            access: Allow
+            priority: 100
+            direction: Inbound
+            
+          - name: DenyAll
+            access: Deny
+            priority: 300
+            direction: Inbound
+
+    - name: Create virtual network "{{ VNET_name }}"
+      azure_rm_virtualnetwork:
+        resource_group: "{{ resource_group_network }}"
+        name: "{{ VNET_name }}"
+        address_prefixes: "10.10.0.0/24"
+
+    - name: Add GatewaySubnet
+      azure_rm_subnet:
+        resource_group: "{{ resource_group_network }}"
+        name: GatewaySubnet
+        address_prefix: "10.10.0.0/28"
+        virtual_network: "{{ VNET_name }}"
+
+    - name: Add "{{ Subnet1_name }}"
+      azure_rm_subnet:
+        resource_group: "{{ resource_group_network }}"
+        name: "{{ Subnet1_name }}"
+        address_prefix: "10.10.0.16/28"
+        virtual_network: "{{ VNET_name }}"
+        security_group:
+          name: "{{ NSG1_name }}"
+          resource_group: "{{ resource_group_network }}"
+
+    - name: Create a public ip address
+      azure_rm_publicipaddress:
+        resource_group: "{{ resource_group_network }}"
+        name: "{{ customer_code }}-PIP-01"
+        allocation_method: Dynamic
+
+#    - name: Create virtual network gateway without bgp settings
+#      azure_rm_virtualnetworkgateway:
+#        resource_group: "{{ resource_group_network }}"
+#        name: "{{ customer_code }}-VNG-01"
+#        ip_configurations:
+#          - name: testipconfig
+#            private_ip_allocation_method: Dynamic
+#            public_ip_address_name: "{{ customer_code }}-PIP-01"
+#        virtual_network: "{{ VNET_name }}"
+#        vpn_type: policy_based
+#        sku: Basic
+
+#    - name: create Azure storage account
+#      azure_rm_storageaccount:
+#        name: '{{ virtual_machine_name }}'
+#        resource_group: "{{ resource_group_vm }}"
+#        account_type: Standard_LRS
+
+    - name: Create a network interface with private IP address only (no Public IP)
+      azure_rm_networkinterface:
+        name: "{{ virtual_machine_name }}-nic001"
+        resource_group: "{{ resource_group_vm }}"
+        virtual_network:
+          name: "{{ VNET_name }}"
+          resource_group: "{{ resource_group_network }}"
+        subnet_name: "{{ Subnet1_name }}"
+        create_with_security_group: False
+        ip_configurations:
+          - name: ipconfig1
+            primary: True
+
+    - name: Create a Log Analytics workspace
+      azure_rm_loganalyticsworkspace:
+        resource_group: "{{ resource_group_monitoring }}"
+        name: "{{ customer_code }}-la-01-Ansible"
+        location: "{{ location }}"
+
+    - name: create VM diagnostics storage account
+      azure_rm_storageaccount:
+        resource_group: "{{ resource_group_vm }}"
+        name: "stadiag{{ virtual_machine_name }}"
+        type: Standard_LRS
+
+    - name: provision new Azure virtual host
+      azure_rm_virtualmachine:
+        admin_username: "{{ admin_username }}"
+        admin_password: "{{ admin_password }}"
+        os_type: Windows
+        image:
+          offer: WindowsServer
+          publisher: MicrosoftWindowsServer
+          sku: 2019-Datacenter-smalldisk
+          version: "2019.0.20190603"
+        name: "{{ virtual_machine_name }}"
+        resource_group: "{{ resource_group_vm }}"
+        state: present
+        vm_size: Standard_B2s
+        managed_disk_type: StandardSSD_LRS
+        os_disk_name: "{{ virtual_machine_name }}-OS-Disk"
+        network_interfaces:
+        - resource_group: "{{ resource_group_vm }}"
+          name: "{{ virtual_machine_name }}-nic001"
+        public_ip_allocation_method: Disabled
+        boot_diagnostics:
+          enabled: yes
+          storage_account: "stadiag{{ virtual_machine_name }}"
+
+    - name: Create managed disk
+      azure_rm_manageddisk:
+        name: "{{ virtual_machine_name }}-DataDisk-01"
+        location: "{{ location }}"
+        resource_group: "{{ resource_group_vm }}"
+        disk_size_gb: 32
+        storage_account_type: StandardSSD_LRS
+        managed_by: "{{ virtual_machine_name }}"
+
+    - name: Create VM Extension
+      azure_rm_virtualmachineextension:
+        name: IaaSAntimalware
+        location: "{{ location }}"
+        resource_group: "{{ resource_group_vm }}"
+        virtual_machine_name: "{{ virtual_machine_name }}"
+        publisher: Microsoft.Azure.Security
+        virtual_machine_extension_type: IaaSAntimalware
+        type_handler_version: '1.3'
+        auto_upgrade_minor_version: true
+
+#   - name: Get information on specific Virtual Machine Extension
+#      azure_rm_virtualmachineextension_info:
+#        resource_group: "{{ resource_group_vm }}"
+#        virtual_machine_name: "{{ virtual_machine_name }}"
+#        name: IaaSAntimalware
+#
+#  - name: Create VM Extension
+#    azure_rm_virtualmachineextension:
+#      name: MicrosoftMonitoringAgent
+#      location: "{{ location }}"
+#      resource_group: "{{ resource_group_vm }}"
+#      virtual_machine_name: "{{ virtual_machine_name }}"
+#      publisher: Microsoft.EnterpriseCloud.Monitoring
+#      virtual_machine_extension_type: Microsoft.EnterpriseCloud.Monitoring.MicrosoftMonitoringAgent
+#      type_handler_version: 1.0
+#      settings: '{"workspaceId": "myWorkSpaceId"}'
+#      auto_upgrade_minor_version: true
+#        virtual_network_resource_group: "{{ resource_group_network }}"
+#        virtual_network_name: "{{ VNET_name }}"
+#        subnet_name: "{{ Subnet1_name }}"
+
+#    - name: create Azure vm extension to enable HTTPS WinRM listener
+#      azure_rm_virtualmachine_extension:
+#        name: winrm-extension
+#        resource_group: "{{ resource_group_vm }}"
+#        virtual_machine_name: "{{ virtual_machine_name }}"
+#        publisher: Microsoft.Compute
+#        virtual_machine_extension_type: CustomScriptExtension
+#        type_handler_version: 1.9
+#        settings: '{"commandToExecute": "powershell.exe -ExecutionPolicy ByPass -EncodedCommand {{winrm_enable_script}}"}'
+#        auto_upgrade_minor_version: true
+#
+#    - name: wait for the WinRM port to come online
+#      wait_for:
+#        port: 5986
+#        host: '{{azure_vm.properties.networkProfile.networkInterfaces[0].properties.ipConfigurations[0].properties.publicIPAddress.properties.ipAddress}}'
+#        timeout: 600
