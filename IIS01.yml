@@ -5,7 +5,7 @@
   tasks:
 
   -name: Install IIS
-   win_iis_website:
+  win_iis_website:
      name: Acme
      state: started
      port: 80
